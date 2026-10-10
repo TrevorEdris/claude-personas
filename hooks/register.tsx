@@ -5,6 +5,7 @@ import type { Persona, PersonaSource, Registry } from '../types'
 import { BLOCK_NAME, buildBlock, OFF_TEXT } from './block'
 import { emptyRegistry, ingest } from './registry'
 import { toSettings, type Settings } from './settings'
+import { footerWord, pickSpinner } from './words'
 
 // The engine follows `$` only into functions declared in this file, so every helper that
 // touches `$` lives here; the modules beside it hold pure logic. The state atoms are declared
@@ -14,6 +15,8 @@ const EMPTY: Registry = { personas: {}, skipped: [] }
 
 const registryAtom = atom({ plugin: 'persona', key: 'registry' } as const, EMPTY)
 const announcedAtom = atom({ plugin: 'persona', key: 'announced' } as const, false)
+const spinnerWordAtom = atom({ plugin: 'persona', key: 'spinnerWord' } as const, null)
+const warnedMissingAtom = atom({ plugin: 'persona', key: 'warnedMissing' } as const, false)
 
 async function getSettings($: EngineInterface): Promise<Settings> {
   return toSettings(await $.store.get('persona'), await $.store.get('intensity'))
@@ -59,9 +62,22 @@ async function reloadRegistry($: EngineInterface): Promise<Registry> {
   return registry
 }
 
+async function refreshStatus($: EngineInterface): Promise<void> {
+  const active = await activePersona($)
+  $.ui.status(active ? `${active.persona.id} · ${active.settings.intensity}` : undefined)
+}
+
+async function warnIfMissing($: EngineInterface): Promise<void> {
+  const settings = await getSettings($)
+  if (settings.persona === 'off' || (await read($, warnedMissingAtom))) return
+  await update($, warnedMissingAtom, () => true)
+  $.ui.toast(`persona: "${settings.persona}" not found; running without a persona. Try /persona reload.`)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await reloadRegistry($)
+    await refreshStatus($)
     return next(e)
   }).catch(($, e, next) => next(e))
 
@@ -76,5 +92,24 @@ export const register: Register = on => {
     // Only cancel a persona this conversation has already been given.
     if (await read($, announcedAtom)) return { blocks: [...res.blocks, { name: BLOCK_NAME, text: OFF_TEXT }] }
     return res
+  }).catch(($, e, next) => next(e))
+
+  // The spinner word is chosen here because $.state cannot be written while ui.render draws.
+  on('turn.start', async ($, e, next) => {
+    const active = await activePersona($)
+    await update($, spinnerWordAtom, () => (active ? pickSpinner(active.persona.spinner, Math.random()) : null))
+    if (active === null) await warnIfMissing($)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
+    const word = await read($, spinnerWordAtom)
+    return word ? next({ ...e, props: { ...e.props, word } }) : next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('ui.render', { component: 'TurnDuration' }, async ($, e, next) => {
+    const active = await activePersona($)
+    const word = active ? footerWord(active.persona.footer, e.props.durationMs) : null
+    return word ? next({ ...e, props: { ...e.props, word } }) : next(e)
   }).catch(($, e, next) => next(e))
 }
