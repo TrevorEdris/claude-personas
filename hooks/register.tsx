@@ -208,8 +208,10 @@ export const register: Register = on => {
 
   on('command.run', { command: 'persona' }, async ($, e) => ({ text: await runCommand($, e.args) }))
 
-  // The picker: a roster of personas beside a card for the active one, drawn in its accent color.
-  // Below 60 columns the card stacks under the roster.
+  // The picker reads like a screenplay page: a cast list on the left, and the active persona
+  // set as a speaker cue, a parenthetical intensity and a line of dialogue on the right. The
+  // persona's accent color marks its swatch in the cast list and the strip down the page.
+  // Below 60 columns the page stacks under the cast list.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const registry = await read($, registryAtom)
@@ -218,6 +220,46 @@ export const register: Register = on => {
     const active = settings.persona === 'off' ? null : (registry.personas[settings.persona] ?? null)
     const accent = active?.color || 'gray'
     const isNarrow = e.props.bodyColumns < 60
+
+    const castList = (
+      <Box flexDirection="column" width={isNarrow ? undefined : 22} flexShrink={0}>
+        {ids.map(id => {
+          const persona = registry.personas[id]!
+          const isActive = id === settings.persona
+          return (
+            <Button
+              key={`persona-${id}`}
+              plain
+              onPress={async () => {
+                await applyPersona($, id)
+              }}
+            >
+              <Text backgroundColor={persona.color || 'gray'}>{'  '}</Text>
+              <Text bold={isActive} color={isActive ? persona.color || undefined : undefined}>
+                {' '}
+                {persona.name}
+              </Text>
+              {persona.source === 'user' && <Text dimColor> (yours)</Text>}
+            </Button>
+          )
+        })}
+        <Box marginTop={1}>
+          <Button
+            key="persona-off"
+            plain
+            onPress={async () => {
+              await applyOff($)
+            }}
+          >
+            <Text backgroundColor={active === null ? 'gray' : undefined}>{'  '}</Text>
+            <Text bold={active === null} dimColor={active !== null}>
+              {' '}
+              No persona
+            </Text>
+          </Button>
+        </Box>
+      </Box>
+    )
 
     const intensityRow = (
       <Box gap={1} marginTop={1}>
@@ -234,81 +276,53 @@ export const register: Register = on => {
       </Box>
     )
 
-    const roster = (
-      <Box flexDirection="column" width={isNarrow ? undefined : 24} flexShrink={0}>
-        {ids.map(id => {
-          const persona = registry.personas[id]!
-          const isActive = id === settings.persona
-          return (
-            <Button
-              key={`persona-${id}`}
-              plain
-              onPress={async () => {
-                await applyPersona($, id)
-              }}
-            >
-              <Text color={persona.color || undefined} bold={isActive}>
-                {isActive ? '▸ ' : '  '}●{' '}
-              </Text>
-              <Text bold={isActive} dimColor={!isActive}>
-                {persona.name}
-              </Text>
-            </Button>
-          )
-        })}
-        <Button
-          key="persona-off"
-          plain
-          onPress={async () => {
-            await applyOff($)
-          }}
-        >
-          <Text bold={active === null} dimColor={active !== null}>
-            {active === null ? '▸ ' : '  '}○ off
-          </Text>
-        </Button>
-      </Box>
-    )
+    const cue = active ? active.name.toUpperCase() : 'CLAUDE'
+    const parenthetical = active ? `(${settings.intensity})` : '(as itself)'
+    const dialogue = active
+      ? active.quote || active.tagline
+      : 'I answer in my normal voice. Pick someone from the cast to change that.'
 
-    const card = active ? (
-      <Box flexDirection="column" borderStyle="round" borderColor={accent} paddingX={1} flexGrow={1}>
-        <Text bold color={accent}>
-          {active.name.toUpperCase()}
-        </Text>
-        <Text dimColor>{active.tagline}</Text>
-        {active.quote !== '' && (
-          <Box marginTop={1}>
-            <Text italic>
-              {active.quote}
+    const page = (
+      <Box flexDirection="row" flexGrow={1}>
+        <Box width={1} backgroundColor={accent} flexShrink={0} />
+        <Box flexDirection="column" paddingX={2} flexGrow={1}>
+          <Box flexDirection="column" alignItems="center">
+            <Text bold color={active ? accent : undefined}>
+              {cue}
             </Text>
+            <Text dimColor>{parenthetical}</Text>
           </Box>
-        )}
-        <Box flexDirection="column" marginTop={1}>
-          <Text>
-            <Text dimColor>spinner </Text>
-            <Text color={accent}>{active.spinner[0] ?? 'Working'}…</Text>
-          </Text>
-          <Text>
-            <Text dimColor>footer  </Text>
-            {active.footer[0] ?? 'Baked'} for 3s
-          </Text>
+          <Box paddingX={4}>
+            <Text>{dialogue}</Text>
+          </Box>
+          {active && (
+            <Box flexDirection="column" marginTop={1}>
+              {active.quote !== '' && (
+                <Text dimColor italic>
+                  {active.tagline}
+                </Text>
+              )}
+              <Box flexDirection="column" marginTop={1}>
+                <Text>
+                  <Text dimColor>While working </Text>
+                  <Text color={accent}>{active.spinner[0] ?? 'Working'}…</Text>
+                </Text>
+                <Text>
+                  <Text dimColor>When done     </Text>
+                  {active.footer[0] ?? 'Baked'} for 3s
+                </Text>
+              </Box>
+            </Box>
+          )}
+          {intensityRow}
         </Box>
-        {intensityRow}
-      </Box>
-    ) : (
-      <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} flexGrow={1}>
-        <Text bold>
-          No persona
-        </Text>
-        <Text dimColor>Claude replies in its normal voice. Pick a persona to give it a character.</Text>
-        {intensityRow}
       </Box>
     )
 
     return (
-      <Box flexDirection={isNarrow ? 'column' : 'row'} gap={1}>
-        {roster}
-        {card}
+      <Box flexDirection={isNarrow ? 'column' : 'row'} gap={2}>
+        {castList}
+        {page}
       </Box>
     )
   })

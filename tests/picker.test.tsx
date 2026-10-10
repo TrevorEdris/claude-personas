@@ -19,9 +19,10 @@ test('the card shows the active persona, and pressing the roster switches it', a
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'persona', surface, ...PANE })
     expect(await ui.findAll({ type: 'Text', text: 'GANDALF' })).toHaveLength(2)
+    expect(await ui.find({ type: 'Text', text: '(excessive)' })).toBeTruthy()
     expect(await ui.find({ type: 'Text', text: /Hello from gandalf/ })).toBeTruthy()
-    expect(await ui.find({ type: 'Text', text: /spinner gandalf spins/ })).toBeTruthy()
-    expect(await ui.find({ type: 'Text', text: /footer +gandalfed for 3s/ })).toBeTruthy()
+    expect(await ui.find({ type: 'Text', text: /While working +gandalf spins/ })).toBeTruthy()
+    expect(await ui.find({ type: 'Text', text: /When done +gandalfed for 3s/ })).toBeTruthy()
     await ui.press({ key: 'persona-yoda' })
     expect(await ui.find({ type: 'Text', text: /Hello from yoda/ })).toBeTruthy()
     await ui.press({ key: 'persona-gandalf' })
@@ -29,13 +30,13 @@ test('the card shows the active persona, and pressing the roster switches it', a
   }
 })
 
-test('with the persona off the card says Claude uses its normal voice', async ($, on) => {
+test('with the persona off the card casts Claude as itself', async ($, on) => {
   world(on, { bundled: { 'gandalf.md': styled('gandalf') } })
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
   await $.session.start({ cwd: '/', surface: null, isInteractive: false })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'persona', surface, ...PANE })
-    expect(await ui.find({ type: 'Text', text: 'No persona' })).toBeTruthy()
+    expect(await ui.find({ type: 'Text', text: '(as itself)' })).toBeTruthy()
     await ui.unmount()
   }
 })
