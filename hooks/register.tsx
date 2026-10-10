@@ -208,50 +208,107 @@ export const register: Register = on => {
 
   on('command.run', { command: 'persona' }, async ($, e) => ({ text: await runCommand($, e.args) }))
 
+  // The picker: a roster of personas beside a card for the active one, drawn in its accent color.
+  // Below 60 columns the card stacks under the roster.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const registry = await read($, registryAtom)
     const settings = await getSettings($)
-    return (
-      <Box flexDirection="column">
-        <Box>
-          <Text>Intensity: </Text>
-          {INTENSITIES.map(level => (
+    const ids = Object.keys(registry.personas).sort()
+    const active = settings.persona === 'off' ? null : (registry.personas[settings.persona] ?? null)
+    const accent = active?.color || 'gray'
+    const isNarrow = e.props.bodyColumns < 60
+
+    const intensityRow = (
+      <Box gap={1} marginTop={1}>
+        {INTENSITIES.map(level => (
+          <Button
+            key={`intensity-${level}`}
+            label={level === settings.intensity ? `[${level}]` : level}
+            variant={level === settings.intensity ? 'primary' : 'secondary'}
+            onPress={async () => {
+              await applyIntensity($, level)
+            }}
+          />
+        ))}
+      </Box>
+    )
+
+    const roster = (
+      <Box flexDirection="column" width={isNarrow ? undefined : 24} flexShrink={0}>
+        {ids.map(id => {
+          const persona = registry.personas[id]!
+          const isActive = id === settings.persona
+          return (
             <Button
-              key={`intensity-${level}`}
-              label={level === settings.intensity ? `[${level}]` : level}
+              key={`persona-${id}`}
+              plain
               onPress={async () => {
-                await applyIntensity($, level)
+                await applyPersona($, id)
               }}
-            />
-          ))}
-        </Box>
+            >
+              <Text color={persona.color || undefined} bold={isActive}>
+                {isActive ? '▸ ' : '  '}●{' '}
+              </Text>
+              <Text bold={isActive} dimColor={!isActive}>
+                {persona.name}
+              </Text>
+            </Button>
+          )
+        })}
         <Button
           key="persona-off"
-          label={settings.persona === 'off' ? '▸ off' : '  off'}
+          plain
           onPress={async () => {
             await applyOff($)
           }}
-        />
-        {Object.keys(registry.personas)
-          .sort()
-          .map(id => {
-            const persona = registry.personas[id]!
-            return (
-              <Button
-                key={`persona-${id}`}
-                onPress={async () => {
-                  await applyPersona($, id)
-                }}
-              >
-                {id === settings.persona ? '▸ ' : '  '}
-                {persona.name}{' '}
-                <Text dimColor>
-                  {persona.tagline} · {persona.spinner[0] ?? '—'} · {persona.source}
-                </Text>
-              </Button>
-            )
-          })}
+        >
+          <Text bold={active === null} dimColor={active !== null}>
+            {active === null ? '▸ ' : '  '}○ off
+          </Text>
+        </Button>
+      </Box>
+    )
+
+    const card = active ? (
+      <Box flexDirection="column" borderStyle="round" borderColor={accent} paddingX={1} flexGrow={1}>
+        <Text bold color={accent}>
+          {active.name.toUpperCase()}
+        </Text>
+        <Text dimColor>{active.tagline}</Text>
+        {active.quote !== '' && (
+          <Box marginTop={1}>
+            <Text italic>
+              {active.quote}
+            </Text>
+          </Box>
+        )}
+        <Box flexDirection="column" marginTop={1}>
+          <Text>
+            <Text dimColor>spinner </Text>
+            <Text color={accent}>{active.spinner[0] ?? 'Working'}…</Text>
+          </Text>
+          <Text>
+            <Text dimColor>footer  </Text>
+            {active.footer[0] ?? 'Baked'} for 3s
+          </Text>
+        </Box>
+        {intensityRow}
+      </Box>
+    ) : (
+      <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} flexGrow={1}>
+        <Text bold>
+          No persona
+        </Text>
+        <Text dimColor>Claude replies in its normal voice. Pick a persona to give it a character.</Text>
+        {intensityRow}
+      </Box>
+    )
+
+    return (
+      <Box flexDirection={isNarrow ? 'column' : 'row'} gap={1}>
+        {roster}
+        {card}
       </Box>
     )
   })
