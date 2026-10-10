@@ -1,9 +1,9 @@
 import type { Persona } from '../types'
 import { INTENSITIES, type Intensity } from './settings'
 
-// The block rides the user message as context. System-prompt sections (prompt.compose) are not
-// delivered to the model in the desktop app, so the persona is sent this way instead.
-export const BLOCK_NAME = 'persona'
+// The block rides a prompt as context the user never sees. System-prompt sections
+// (prompt.compose) and re-read prompt.context blocks did not reliably reach the model in the
+// desktop app, so the persona is sent this way instead.
 
 export const LEVELS: Record<Intensity, string> = {
   minimal: 'Flavor at key moments only: session start/end, warnings, phase transitions.',
