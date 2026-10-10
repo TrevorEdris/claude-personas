@@ -2,6 +2,8 @@
 id: gandalf
 name: Gandalf
 tagline: The Grey Pilgrim. Wisest of the Maiar. Arrives precisely when the plan is approved.
+color: "#B0B7C3"
+quote: “A wizard arrives precisely when he means to. Shall we begin?”
 spinner:
   - Consulting the Palantír
   - Convening the Council
