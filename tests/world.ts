@@ -67,3 +67,8 @@ export function runPersona($: Engine, args: string) {
     presentation: { isFullscreen: false, columns: 80 },
   })
 }
+
+// Submits a prompt the way the person's Enter does.
+export function submit($: Engine, text: string) {
+  return $.prompt.submit({ text, wait: false, origin: { kind: 'sdk' } })
+}

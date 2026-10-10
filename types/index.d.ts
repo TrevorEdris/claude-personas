@@ -16,6 +16,6 @@ export type Registry = { personas: Record<string, Persona>; skipped: Skipped[] }
 
 declare module 'claude-code' {
   interface PluginState {
-    persona: { registry: Registry; spinnerWord: string | null; warnedMissing: boolean; announced: boolean }
+    persona: { registry: Registry; spinnerWord: string | null; warnedMissing: boolean; delivered: string | null }
   }
 }

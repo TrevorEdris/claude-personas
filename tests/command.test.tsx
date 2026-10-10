@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { parseArgs } from '../hooks/command'
-import { HOME, personaFile, runPersona, world } from './world'
+import { HOME, personaFile, runPersona, submit, world } from './world'
 
-const ENGINE = { blocks: [{ name: 'claudeMd', text: 'engine context' }] }
 const BUNDLED = {
   'gandalf.md': personaFile('gandalf'),
   'yoda.md': personaFile('yoda'),
@@ -28,39 +27,39 @@ describe('parseArgs', () => {
   })
 })
 
-test('/persona <id> <intensity> switches the next system prompt', async ($, on) => {
+test('/persona <id> <intensity> switches the persona sent with the next prompt', async ($, on) => {
   const log = world(on, { bundled: BUNDLED, store: { persona: 'gandalf', intensity: 'noticeable' } })
-  on('prompt.context', () => ENGINE)
+  on('prompt.submit', (_$, e) => ({ text: e.text, context: e.context ?? [] }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
   await $.session.start({ cwd: '/', surface: null, isInteractive: false })
   const result = await runPersona($, 'yoda excessive')
   expect(result.text).toBe('Persona set to yoda (excessive).')
-  const { blocks } = await $.prompt.context({ blocks: [] })
-  expect(blocks[1]?.text).toContain('yoda voice body')
+  const sent = await submit($, 'next')
+  expect(sent.context?.[0]).toContain('yoda voice body')
   expect(log.statuses.at(-1)).toBe('yoda · excessive')
   expect(log.toasts.at(-1)).toBe('YODA: The yoda tagline')
 })
 
 test('/persona <unknown> lists the valid ids and changes nothing', async ($, on) => {
   world(on, { bundled: BUNDLED, store: { persona: 'gandalf' } })
-  on('prompt.context', () => ENGINE)
+  on('prompt.submit', (_$, e) => ({ text: e.text, context: e.context ?? [] }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
   await $.session.start({ cwd: '/', surface: null, isInteractive: false })
   const result = await runPersona($, 'sauron')
   expect(result.text).toBe('Unknown persona "sauron". Valid: gandalf, yoda, off.')
-  const { blocks } = await $.prompt.context({ blocks: [] })
-  expect(blocks[1]?.text).toContain('gandalf voice body')
+  const sent = await submit($, 'next')
+  expect(sent.context?.[0]).toContain('gandalf voice body')
 })
 
 test('/persona off sends a cancelling block and clears the status', async ($, on) => {
   const log = world(on, { bundled: BUNDLED, store: { persona: 'gandalf' } })
-  on('prompt.context', () => ENGINE)
+  on('prompt.submit', (_$, e) => ({ text: e.text, context: e.context ?? [] }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
   await $.session.start({ cwd: '/', surface: null, isInteractive: false })
-  await $.prompt.context({ blocks: [] })
+  await submit($, 'hi')
   expect((await runPersona($, 'off')).text).toBe('Persona off.')
-  const { blocks } = await $.prompt.context({ blocks: [] })
-  expect(blocks[1]?.text).toContain('Persona is off.')
+  const sent = await submit($, 'next')
+  expect(sent.context?.[0]).toContain('Persona is off.')
   expect(log.statuses.at(-1)).toBe(undefined)
 })
 
@@ -96,7 +95,7 @@ test('/persona with no pane surface prints the list', async ($, on) => {
 
 test('pressing a persona in the picker pane switches to it', async ($, on) => {
   world(on, { bundled: BUNDLED, store: { persona: 'gandalf' } })
-  on('prompt.context', () => ENGINE)
+  on('prompt.submit', (_$, e) => ({ text: e.text, context: e.context ?? [] }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
   await $.session.start({ cwd: '/', surface: null, isInteractive: false })
   for (const surface of ['terminal', 'desktop'] as const) {
@@ -108,9 +107,10 @@ test('pressing a persona in the picker pane switches to it', async ($, on) => {
       props: { title: 'Persona', isFocused: true, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
     })
     await ui.press({ key: 'persona-yoda' })
-    const { blocks } = await $.prompt.context({ blocks: [] })
-    expect(blocks[1]?.text).toContain('yoda voice body')
+    const sent = await submit($, 'next')
+    expect(sent.context?.[0]).toContain('yoda voice body')
     await ui.press({ key: 'persona-gandalf' })
+    await submit($, 'back to gandalf')
     await ui.unmount()
   }
 })

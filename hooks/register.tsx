@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Persona, PersonaSource, Registry } from '../types'
-import { BLOCK_NAME, buildBlock, OFF_TEXT } from './block'
+import { buildBlock, OFF_TEXT } from './block'
 import { doctorText, listText, parseArgs, USAGE } from './command'
 import { emptyRegistry, ingest } from './registry'
 import { INTENSITIES, toSettings, type Intensity, type Settings } from './settings'
@@ -17,7 +17,8 @@ const PANE = 'persona-picker'
 const EMPTY: Registry = { personas: {}, skipped: [] }
 
 const registryAtom = atom({ plugin: 'persona', key: 'registry' } as const, EMPTY)
-const announcedAtom = atom({ plugin: 'persona', key: 'announced' } as const, false)
+// The persona key (`id:intensity`, or `off`) last attached to a prompt in this conversation.
+const deliveredAtom = atom({ plugin: 'persona', key: 'delivered' } as const, null as string | null)
 const spinnerWordAtom = atom({ plugin: 'persona', key: 'spinnerWord' } as const, null)
 const warnedMissingAtom = atom({ plugin: 'persona', key: 'warnedMissing' } as const, false)
 
@@ -86,8 +87,6 @@ async function afterChange($: EngineInterface): Promise<void> {
   await update($, warnedMissingAtom, () => false)
   await refreshStatus($)
   $.ui.invalidate('ui.render')
-  // The persona block rides the next user message only after the context is re-read.
-  $.ui.invalidate('prompt.context')
 }
 
 async function applyPersona($: EngineInterface, id: string, intensity?: Intensity): Promise<string> {
@@ -163,17 +162,29 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  on('prompt.context', async ($, e, next) => {
-    const res = await next(e)
+  // The persona rides the next prompt as context the user never sees. It is sent again only
+  // when the persona or intensity changes, or after a compaction or /clear drops it from history.
+  on('prompt.submit', async ($, e, next) => {
     const active = await activePersona($)
-    if (active !== null) {
-      await update($, announcedAtom, () => true)
-      const text = buildBlock(active.persona, active.settings.intensity)
-      return { blocks: [...res.blocks, { name: BLOCK_NAME, text }] }
-    }
-    // Only cancel a persona this conversation has already been given.
-    if (await read($, announcedAtom)) return { blocks: [...res.blocks, { name: BLOCK_NAME, text: OFF_TEXT }] }
+    const key = active ? `${active.persona.id}:${active.settings.intensity}` : 'off'
+    const delivered = await read($, deliveredAtom)
+    // Off needs no block unless this conversation was given a persona to cancel.
+    if (key === delivered || (key === 'off' && delivered === null)) return next(e)
+    const text = active ? buildBlock(active.persona, active.settings.intensity) : OFF_TEXT
+    await update($, deliveredAtom, () => key)
+    return next({ ...e, context: [...(e.context ?? []), text] })
+  }).catch(($, e, next) => next(e))
+
+  on('session.compact', async ($, e, next) => {
+    const res = await next(e)
+    const isMainCompaction = res.messages !== undefined && e.trigger !== 'precompute' && e.agentId === undefined
+    if (isMainCompaction) await update($, deliveredAtom, () => null)
     return res
+  }).catch(($, e, next) => next(e))
+
+  on('session.end', async ($, e, next) => {
+    if (e.reason === 'clear') await update($, deliveredAtom, () => null)
+    return next(e)
   }).catch(($, e, next) => next(e))
 
   // The spinner word is chosen here because $.state cannot be written while ui.render draws.
