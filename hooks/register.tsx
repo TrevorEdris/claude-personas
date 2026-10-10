@@ -208,50 +208,121 @@ export const register: Register = on => {
 
   on('command.run', { command: 'persona' }, async ($, e) => ({ text: await runCommand($, e.args) }))
 
+  // The picker reads like a screenplay page: a cast list on the left, and the active persona
+  // set as a speaker cue, a parenthetical intensity and a line of dialogue on the right. The
+  // persona's accent color marks its swatch in the cast list and the strip down the page.
+  // Below 60 columns the page stacks under the cast list.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const registry = await read($, registryAtom)
     const settings = await getSettings($)
-    return (
-      <Box flexDirection="column">
-        <Box>
-          <Text>Intensity: </Text>
-          {INTENSITIES.map(level => (
+    const ids = Object.keys(registry.personas).sort()
+    const active = settings.persona === 'off' ? null : (registry.personas[settings.persona] ?? null)
+    const accent = active?.color || 'gray'
+    const isNarrow = e.props.bodyColumns < 60
+
+    const castList = (
+      <Box flexDirection="column" width={isNarrow ? undefined : 22} flexShrink={0}>
+        {ids.map(id => {
+          const persona = registry.personas[id]!
+          const isActive = id === settings.persona
+          return (
             <Button
-              key={`intensity-${level}`}
-              label={level === settings.intensity ? `[${level}]` : level}
+              key={`persona-${id}`}
+              plain
               onPress={async () => {
-                await applyIntensity($, level)
+                await applyPersona($, id)
               }}
-            />
-          ))}
+            >
+              <Text backgroundColor={persona.color || 'gray'}>{'  '}</Text>
+              <Text bold={isActive} color={isActive ? persona.color || undefined : undefined}>
+                {' '}
+                {persona.name}
+              </Text>
+              {persona.source === 'user' && <Text dimColor> (yours)</Text>}
+            </Button>
+          )
+        })}
+        <Box marginTop={1}>
+          <Button
+            key="persona-off"
+            plain
+            onPress={async () => {
+              await applyOff($)
+            }}
+          >
+            <Text backgroundColor={active === null ? 'gray' : undefined}>{'  '}</Text>
+            <Text bold={active === null} dimColor={active !== null}>
+              {' '}
+              No persona
+            </Text>
+          </Button>
         </Box>
-        <Button
-          key="persona-off"
-          label={settings.persona === 'off' ? '▸ off' : '  off'}
-          onPress={async () => {
-            await applyOff($)
-          }}
-        />
-        {Object.keys(registry.personas)
-          .sort()
-          .map(id => {
-            const persona = registry.personas[id]!
-            return (
-              <Button
-                key={`persona-${id}`}
-                onPress={async () => {
-                  await applyPersona($, id)
-                }}
-              >
-                {id === settings.persona ? '▸ ' : '  '}
-                {persona.name}{' '}
-                <Text dimColor>
-                  {persona.tagline} · {persona.spinner[0] ?? '—'} · {persona.source}
+      </Box>
+    )
+
+    const intensityRow = (
+      <Box gap={1} marginTop={1}>
+        {INTENSITIES.map(level => (
+          <Button
+            key={`intensity-${level}`}
+            label={level === settings.intensity ? `[${level}]` : level}
+            variant={level === settings.intensity ? 'primary' : 'secondary'}
+            onPress={async () => {
+              await applyIntensity($, level)
+            }}
+          />
+        ))}
+      </Box>
+    )
+
+    const cue = active ? active.name.toUpperCase() : 'CLAUDE'
+    const parenthetical = active ? `(${settings.intensity})` : '(as itself)'
+    const dialogue = active
+      ? active.quote || active.tagline
+      : 'I answer in my normal voice. Pick someone from the cast to change that.'
+
+    const page = (
+      <Box flexDirection="row" flexGrow={1}>
+        <Box width={1} backgroundColor={accent} flexShrink={0} />
+        <Box flexDirection="column" paddingX={2} flexGrow={1}>
+          <Box flexDirection="column" alignItems="center">
+            <Text bold color={active ? accent : undefined}>
+              {cue}
+            </Text>
+            <Text dimColor>{parenthetical}</Text>
+          </Box>
+          <Box paddingX={4}>
+            <Text>{dialogue}</Text>
+          </Box>
+          {active && (
+            <Box flexDirection="column" marginTop={1}>
+              {active.quote !== '' && (
+                <Text dimColor italic>
+                  {active.tagline}
                 </Text>
-              </Button>
-            )
-          })}
+              )}
+              <Box flexDirection="column" marginTop={1}>
+                <Text>
+                  <Text dimColor>While working </Text>
+                  <Text color={accent}>{active.spinner[0] ?? 'Working'}…</Text>
+                </Text>
+                <Text>
+                  <Text dimColor>When done     </Text>
+                  {active.footer[0] ?? 'Baked'} for 3s
+                </Text>
+              </Box>
+            </Box>
+          )}
+          {intensityRow}
+        </Box>
+      </Box>
+    )
+
+    return (
+      <Box flexDirection={isNarrow ? 'column' : 'row'} gap={2}>
+        {castList}
+        {page}
       </Box>
     )
   })

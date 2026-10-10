@@ -44,7 +44,6 @@ export function world(on: On, options: WorldOptions = {}): WorldLog {
     log.toasts.push(e.text)
     return { value: undefined }
   })
-  on('ui.invalidate', () => ({ value: undefined }))
   on('ui.open', () => ({ value: { isPlaced: false as const, reason: 'no surface in tests' } }))
   on('fs.write', (_$, e) => {
     log.writes[e.path] = e.text

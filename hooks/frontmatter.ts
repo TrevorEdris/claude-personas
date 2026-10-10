@@ -46,7 +46,7 @@ export function parsePersona(text: string, source: PersonaSource): ParseResult {
   const match = text.match(FENCE)
   if (!match) return { error: 'no frontmatter' }
   const fields = parseFrontmatter(match[1] ?? '')
-  const { id, name, tagline } = fields
+  const { id, name, tagline, color, quote } = fields
   if (typeof id !== 'string' || !ID.test(id)) return { error: 'missing or invalid id' }
   if (typeof name !== 'string' || name === '') return { error: 'missing name' }
   return {
@@ -54,6 +54,8 @@ export function parsePersona(text: string, source: PersonaSource): ParseResult {
       id,
       name,
       tagline: typeof tagline === 'string' ? tagline : '',
+      color: typeof color === 'string' ? color : '',
+      quote: typeof quote === 'string' ? quote : '',
       spinner: asList(fields.spinner),
       footer: asList(fields.footer),
       body: (match[2] ?? '').trim(),

@@ -10,6 +10,8 @@ describe('parsePersona', () => {
         id: 'gandalf',
         name: 'GANDALF',
         tagline: 'The gandalf tagline',
+        color: '',
+        quote: '',
         spinner: ['gandalf spins'],
         footer: ['gandalfed'],
         body: '## Voice Guide\ngandalf voice body',
@@ -33,8 +35,15 @@ describe('parsePersona', () => {
 
   test('missing spinner and footer become empty lists', () => {
     expect(parsePersona('---\nid: x\nname: X\n---\nbody\n', 'user')).toEqual({
-      persona: { id: 'x', name: 'X', tagline: '', spinner: [], footer: [], body: 'body', source: 'user' },
+      persona: { id: 'x', name: 'X', tagline: '', color: '', quote: '', spinner: [], footer: [], body: 'body', source: 'user' },
     })
+  })
+})
+
+describe('parsePersona display fields', () => {
+  test('reads color and quote', () => {
+    const result = parsePersona('---\nid: x\nname: X\ncolor: "#A0522D"\nquote: \u201cHello.\u201d [aside]\n---\nbody\n', 'user')
+    expect(result).toMatchObject({ persona: { color: '#A0522D', quote: '\u201cHello.\u201d [aside]' } })
   })
 })
 
