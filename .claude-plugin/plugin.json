@@ -1,0 +1,6 @@
+{
+  "name": "persona",
+  "version": "0.1.0",
+  "description": "Talk to Claude as a character: persona voice, spinner and footer words, switchable live with /persona",
+  "types": "./types/index.d.ts"
+}
